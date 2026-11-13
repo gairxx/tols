@@ -255,7 +255,7 @@ const store = {
   del(k){ try{ localStorage.removeItem(k); }catch(e){} }
 };
 
-const wrap = i => ((i % NROWS) + NROWS)%NROWS;
+const wrap = i => (((i - 1) % NROWS) + NROWS) % NROWS + 1;
 const money = c => "$" + (c/100).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
 const smoney = c => (c<0?"-":"+") + money(Math.abs(c));
 const nmoney = c => c === 0 ? money(0) : smoney(c);
@@ -268,7 +268,7 @@ let betCents = 250, minProfitCents = 0;
 let ledgerOpen = false, ledgerPage = 0;
 let seq = [], cand = null;
 
-const poolAt = i => pal[bytes[wrap(i)]];
+const poolAt = i => pal[bytes[wrap(i) - 1]];
 
 function decode(b64){
   const bin = atob(b64);
@@ -278,10 +278,10 @@ function decode(b64){
 }
 function allCand(){
   const s = new Set();
-  for(let i=0;i<NROWS;i++) s.add(i);
+  for(let i=1;i<=NROWS;i++) s.add(i);
   return s;
 }
-function sessKey(){ return "lockin0_" + gameKey + "_" + betCents; }
+function sessKey(){ return "lockin1_" + gameKey + "_" + betCents; }
 
 function setGame(k){
   gameKey = k;
@@ -457,7 +457,7 @@ function render(){
   if(dead){
     $("#heroN").textContent = "NO MATCH";
     $("#heroL").textContent = "undo one spin, or reset";
-    $("#heroS").textContent = "wrong game/bet, a missed spin, or an untracked free round";
+    $("#heroS").textContent = "wrong game/bet, missed spin, untracked $0.25 spin, or bonus entered early";
   }else if(locked){
     $("#heroN").textContent = "LOCKED";
     $("#heroL").textContent = "seat " + fmt(base) + " · next " +
@@ -520,7 +520,9 @@ function render(){
       mc.className = "mc";
       mc.textContent = locked ? "TAP" : compact(counts.get(v));
 
-      b.append(mv, ma, mc);
+      b.appendChild(mv);
+      b.appendChild(ma);
+      b.appendChild(mc);
       out.appendChild(b);
     }
   }
@@ -573,7 +575,7 @@ function render(){
   const savedBet = +(store.get("lockin_bet") || 250);
   if(BETS.indexOf(savedBet) >= 0) betCents = savedBet;
 
-  const savedMin = +(store.get("lockin0_minprofit") || 0);
+  const savedMin = +(store.get("lockin_minprofit") || 0);
   if(MINPROFITS.some(t => t.v === savedMin)) minProfitCents = savedMin;
 
   g.value = gameKey;
@@ -582,7 +584,7 @@ function render(){
 
   g.onchange = () => { store.set("lockin_game", g.value); setGame(g.value); };
   b.onchange = () => { betCents = +b.value; store.set("lockin_bet", String(betCents)); loadSession(); };
-  mp.onchange = () => { minProfitCents = +mp.value; store.set("lockin0_minprofit", String(minProfitCents)); ledgerPage = 0; render(); };
+  mp.onchange = () => { minProfitCents = +mp.value; store.set("lockin_minprofit", String(minProfitCents)); ledgerPage = 0; render(); };
   $("#undo").onclick = undo;
   $("#reset").onclick = reset;
   $("#ledgerBtn").onclick = () => { ledgerOpen = !ledgerOpen; render(); };
@@ -591,15 +593,15 @@ function render(){
   $("#pgFirst").onclick = () => { ledgerPage = 0; render(); };
   $("#pgLast").onclick = () => { ledgerPage = 1e9; render(); };
 
-  $("#help").textContent = "Every spin is tested against the full 60,000-row pool — all 0–59,999 seats, " +
-    "wrapping 59,999 → 0. No current index or cursor guess is used: each entry is checked against " +
-    "the whole pool from scratch, removing the seats that could not be there until one seat locks. " +
-    "Keep one game and one bet for the whole session and enter every spin in order (losses included; " +
-    "free spins run on the $0.25 session). Only outcomes still possible are shown — if the machine shows " +
-    "one that is missing, a spin was missed: UNDO or RESET. Once locked, the ride card finds the next " +
-    "seat where cumulative wins beat every stake: it shows the total cost to get there, the worst " +
-    "drawdown (capital locked), the win at that seat, and a per-seat ledger of win, cumulative cost and " +
-    "running net. Min net profit lets you skip rides that only break even.";
+  $("#help").textContent = "Every spin is tested against the full 60,000-row pool — seats 1–60,000, " +
+    "wrapping 60,000 → 1, matching the database ticket numbers exactly. No cursor guess is used: " +
+    "each entry filters candidate seats until one locks. " +
+    "BONUS ROUNDS: enter only the FINAL total payout as a single spin once the feature ends — " +
+    "intermediate respins, mini-games, and animations are cosmetic and do not each advance the cursor. " +
+    "WIN-A-SPIN: low-credit / free spins advance the $0.25 cursor, not your current bet; run those in a " +
+    "separate $0.25 session. Only still-possible outcomes are shown — if an outcome is missing, a spin was " +
+    "missed: UNDO or RESET. Once locked, the ride card traces the path to the next seat where cumulative " +
+    "wins beat all stakes, showing total cost, worst drawdown (capital locked), win at exit, and a per-seat ledger.";
 
   setGame(gameKey);
 })();
